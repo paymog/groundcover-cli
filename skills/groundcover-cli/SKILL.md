@@ -297,7 +297,7 @@ groundcover dashboards get <uuid> | jq -r '.preset | fromjson | .variables'
 ```
 The webapp encodes selected variable values in a `variables` **URL query param** — a URL-encoded JSON object keyed by `$<variableName>`. Each entry needs `name`, `key`, `values` (array; supports globs like `myapp*`), `datasource` (usually `"metrics"`), and `refiner.metric` (the source metric from the var's `datasource.metric`).
 
-**Pin EVERY variable you care about — including ones you want wide open.** Any var you omit falls back to the dashboard's *saved default*, which is often NOT `*` (e.g. a hardcoded `deployment` hash, or `shard: primary`). To get a truly broad view, explicitly set those to `["*"]`. Always confirm a label value exists before using it — e.g. `app_kubernetes_io_instance` may have no bare `myapp`, only `myapp-indexer-0` etc., so use the `myapp*` glob.
+**Pin EVERY variable you care about — including ones you want wide open.** Any var you omit falls back to the dashboard's *saved default*, which is often NOT `*` (e.g. a hardcoded `deployment` hash, or `shard: primary`). To get a truly broad view, explicitly set those to `["*"]`. Always confirm a label value exists before using it — e.g. `app_kubernetes_io_instance` may have no bare `myapp`, only `myapp-web-0` etc., so use the `myapp*` glob.
 
 Build it with jq so the encoding is correct:
 ```sh
