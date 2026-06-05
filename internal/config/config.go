@@ -2,12 +2,14 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	sdktransport "github.com/groundcover-com/groundcover-sdk-go/pkg/transport"
+	"github.com/paymog/groundcover-cli/internal/credstore"
 )
 
 const (
@@ -23,6 +25,7 @@ type Config struct {
 	BackendID  string
 	BaseURL    string
 	TenantUUID string
+	Profile    string
 	Raw        bool
 	Timeout    time.Duration
 }
@@ -47,6 +50,55 @@ func (c *Config) ApplyEnv() {
 	if strings.TrimSpace(c.BaseURL) == "" {
 		c.BaseURL = defaultString(firstEnv("GROUNDCOVER_BASE_URL", "GC_BASE_URL"), DefaultBaseURL)
 	}
+}
+
+// Resolve fills credentials following this precedence (highest first):
+//
+//  1. explicit --api-key flag or GROUNDCOVER_API_KEY/GC_API_KEY env var
+//  2. --profile flag       -> stored profile (keyring + metadata)
+//  3. default profile      -> stored profile (keyring + metadata)
+//
+// An explicit key combined with --profile is rejected as ambiguous. Explicitly
+// set fields (flags/env for backend-id, base-url, tenant-uuid) always win over
+// profile-supplied values; the profile only fills gaps. After profile lookup,
+// ApplyEnv backfills any remaining unset fields from the environment/defaults.
+func (c *Config) Resolve(store *credstore.Store) error {
+	envKey := firstEnv("GROUNDCOVER_API_KEY", "GC_API_KEY")
+	explicitKey := strings.TrimSpace(c.APIKey) != "" || envKey != ""
+
+	if explicitKey && c.Profile != "" {
+		return errors.New("cannot combine --profile with an explicit --api-key/GROUNDCOVER_API_KEY; choose one")
+	}
+
+	if !explicitKey {
+		name := c.Profile
+		if name == "" {
+			name = store.Default
+		}
+		if name != "" {
+			p, ok := store.Profiles[name]
+			if !ok {
+				return fmt.Errorf("profile %q not found; run `groundcover auth login` or `groundcover auth list`", name)
+			}
+			key, err := store.APIKey(name)
+			if err != nil {
+				return fmt.Errorf("no keyring entry for profile %q; re-run `groundcover auth login`: %w", name, err)
+			}
+			c.APIKey = key
+			if c.BackendID == "" {
+				c.BackendID = p.BackendID
+			}
+			if c.TenantUUID == "" {
+				c.TenantUUID = p.TenantUUID
+			}
+			if (strings.TrimSpace(c.BaseURL) == "" || c.BaseURL == DefaultBaseURL) && p.BaseURL != "" {
+				c.BaseURL = p.BaseURL
+			}
+		}
+	}
+
+	c.ApplyEnv()
+	return nil
 }
 
 func (c Config) NormalizedBaseURL() string {

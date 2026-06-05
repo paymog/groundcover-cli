@@ -29,6 +29,22 @@ No tenant UUID default — set `--tenant-uuid` / `GROUNDCOVER_TENANT_UUID` for t
 
 Override env: `GROUNDCOVER_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GROUNDCOVER_BASE_URL` (or `GC_*` equivalents). Same names work as `--api-key`, `--backend-id`, `--tenant-uuid`, `--base-url` flags.
 
+### Stored profiles (alternative to env vars)
+
+Instead of exporting `GROUNDCOVER_API_KEY` every session, credentials can be saved in named profiles. The API key goes in the OS keyring; metadata (backend ID, base URL, tenant UUID) lives in `~/.config/groundcover/profiles.yaml`.
+
+```sh
+groundcover auth login [name] --backend-id <id>   # prompts for key (or --key); validates before saving
+groundcover auth list                              # * marks default
+groundcover auth default <name>                    # change default
+groundcover --profile <name> <command>             # use a profile for one command
+groundcover auth status                            # show resolved source
+groundcover auth token                             # print resolved key
+groundcover auth logout <name> [-f]
+```
+
+Precedence: `--api-key`/`GROUNDCOVER_API_KEY` env → `--profile <name>` → default profile. An explicit key plus `--profile` is rejected as ambiguous. `GROUNDCOVER_PROFILE` sets the profile via env.
+
 Other global flags: `--timeout` (default 30s), `--raw` (don't reformat JSON response).
 
 ## Two surfaces
