@@ -153,6 +153,22 @@ Generated commands are written to `internal/raw/commands_generated.go`.
 - `internal/raw`: best-effort command registry and runner for HAR-derived endpoints.
 - `internal/config`: shared auth, base URL, timeout, and SDK transport setup.
 
+## Claude Code skill
+
+This repo ships a [Claude Code](https://claude.com/claude-code) skill that teaches the
+agent how to drive the CLI (auth, the SDK-vs-raw split, and ready-made request-body
+templates for logs/traces/metrics/k8s). It lives in [`skills/groundcover-cli`](skills/groundcover-cli).
+
+Install it for your user so it's available in every project:
+
+```sh
+git clone https://github.com/paymog/groundcover-cli
+cp -r groundcover-cli/skills/groundcover-cli ~/.claude/skills/groundcover-cli
+```
+
+Or copy it into a single project at `.claude/skills/groundcover-cli`. Then ask Claude Code
+to query logs, manage monitors, debug a prod issue, etc., and it will invoke `groundcover`.
+
 ## Release
 
 Releases are tag-driven:
@@ -162,4 +178,4 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-GitHub Actions runs GoReleaser, then updates the source-build formula in `paymog/homebrew-tap`. The repo needs a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to that tap.
+GitHub Actions runs GoReleaser, then updates the source-build formula in `paymog/homebrew-tap`. The workflow pushes to the tap over SSH using a deploy key stored as the `HOMEBREW_TAP_DEPLOY_KEY` secret (the public half is a read-write deploy key on the tap repo).
