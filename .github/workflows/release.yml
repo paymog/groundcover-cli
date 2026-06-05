@@ -28,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Update Homebrew tap
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -37,7 +37,12 @@ jobs:
           revision="$(git rev-parse HEAD)"
           tap_dir="$(mktemp -d)/homebrew-tap"
 
-          gh repo clone paymog/homebrew-tap "$tap_dir"
+          key_file="$(mktemp)"
+          printf '%s\n' "$DEPLOY_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          export GIT_SSH_COMMAND="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+
+          git clone git@github.com:paymog/homebrew-tap.git "$tap_dir"
           mkdir -p "$tap_dir/Formula"
           cat > "$tap_dir/Formula/groundcover.rb" <<EOF
           class Groundcover < Formula
@@ -61,7 +66,6 @@ jobs:
           EOF
 
           cd "$tap_dir"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/paymog/homebrew-tap.git"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Formula/groundcover.rb
