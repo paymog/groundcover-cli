@@ -159,15 +159,28 @@ This repo ships a [Claude Code](https://claude.com/claude-code) skill that teach
 agent how to drive the CLI (auth, the SDK-vs-raw split, and ready-made request-body
 templates for logs/traces/metrics/k8s). It lives in [`skills/groundcover-cli`](skills/groundcover-cli).
 
-Install it for your user so it's available in every project:
+Install it with [`npx skills`](https://github.com/vercel-labs/skills) (Vercel's agent-skills tool):
+
+```sh
+# install into the current project (.claude/skills/)
+npx skills add paymog/groundcover-cli
+
+# or install globally for your user, skipping prompts
+npx skills add paymog/groundcover-cli --global --yes
+```
+
+Useful flags: `--list` to preview without installing, `--skill groundcover-cli` to target it
+explicitly, `-a claude-code` to pick the agent.
+
+Or install manually:
 
 ```sh
 git clone https://github.com/paymog/groundcover-cli
 cp -r groundcover-cli/skills/groundcover-cli ~/.claude/skills/groundcover-cli
 ```
 
-Or copy it into a single project at `.claude/skills/groundcover-cli`. Then ask Claude Code
-to query logs, manage monitors, debug a prod issue, etc., and it will invoke `groundcover`.
+Then ask Claude Code to query logs, manage monitors, debug a prod issue, etc., and it will
+invoke `groundcover`.
 
 ## Release
 
