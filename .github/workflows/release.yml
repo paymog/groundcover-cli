@@ -1,0 +1,70 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          version="${TAG#v}"
+          revision="$(git rev-parse HEAD)"
+          tap_dir="$(mktemp -d)/homebrew-tap"
+
+          gh repo clone paymog/homebrew-tap "$tap_dir"
+          mkdir -p "$tap_dir/Formula"
+          cat > "$tap_dir/Formula/groundcover.rb" <<EOF
+          class Groundcover < Formula
+            desc "CLI with SDK-backed writes and raw webapp endpoint passthrough"
+            homepage "https://github.com/paymog/groundcover-cli"
+            url "https://github.com/paymog/groundcover-cli.git",
+                tag:      "$TAG",
+                revision: "$revision"
+            version "$version"
+
+            depends_on "go" => :build
+
+            def install
+              system "go", "build", *std_go_args(ldflags: "-s -w -X github.com/paymog/groundcover-cli/internal/cli.version=#{version}"), "./cmd/groundcover"
+            end
+
+            test do
+              assert_match "Groundcover CLI", shell_output("#{bin}/groundcover --help")
+            end
+          end
+          EOF
+
+          cd "$tap_dir"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/paymog/homebrew-tap.git"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/groundcover.rb
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: update groundcover to $TAG"
+          git push
