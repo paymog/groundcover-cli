@@ -27,12 +27,45 @@ go build ./cmd/groundcover
 
 ## Auth
 
+The simplest setup is environment variables (recommended for CI):
+
 ```sh
 export GROUNDCOVER_API_KEY=...
 export GROUNDCOVER_BACKEND_ID=...
 ```
 
 Also accepted: `GC_API_KEY`, `GC_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GC_TENANT_UUID`, `GROUNDCOVER_BASE_URL`, `GC_BASE_URL`.
+
+### Stored profiles
+
+For day-to-day use you can store credentials in named profiles. The API key is
+kept in your OS keyring (macOS Keychain, Linux libsecret/secret-service, Windows
+Credential Manager); only non-secret metadata (backend ID, base URL, tenant UUID)
+is written to `~/.config/groundcover/profiles.yaml` (XDG-aware; `%AppData%` on
+Windows).
+
+```sh
+groundcover auth login              # prompts for the API key; profile "default"
+groundcover auth login prod --backend-id my-backend --key lin_...
+groundcover auth list               # table; * marks the default
+groundcover auth default prod       # set the default profile
+groundcover --profile prod monitors list   # use a profile for one command
+groundcover auth status             # show which source resolved
+groundcover auth token              # print the resolved API key
+groundcover auth logout prod        # remove a profile (-f to skip confirm)
+```
+
+`login` validates the key against the API before saving it. The first profile
+added becomes the default.
+
+**Credential precedence** (highest first):
+
+1. `--api-key` flag / `GROUNDCOVER_API_KEY` env var
+2. `--profile <name>` → stored profile
+3. default profile → stored profile
+
+Combining an explicit key with `--profile` is rejected as ambiguous. If no keyring
+is available, fall back to `GROUNDCOVER_API_KEY`.
 
 Defaults (override the env or flag for your own backend/tenant):
 
