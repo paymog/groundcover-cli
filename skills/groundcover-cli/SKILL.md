@@ -332,6 +332,79 @@ Notes: the dashboard opens via `viewId=<uuid>` (not the `/dashboards/<uuid>` pat
 groundcover raw prometheus api query --query query='up{namespace="prod"}'
 ```
 
+## Building & editing dashboards
+
+The interesting part of a dashboard isn't the CRUD verbs (`dashboards get/list/create/update/archive/restore`) — it's the **preset**, where the whole panel layout lives in one field.
+
+### Preset structure
+
+`dashboards get <uuid>` returns the dashboard with `.preset` as a **JSON string** (parse with `fromjson` / `json.loads`; re-serialize to a string before writing back). Shape:
+
+```jsonc
+{
+  "spec": { "layoutType": "ordered", "crosshairSyncEnabled": true },
+  "layout": [ /* one entry per TOP-LEVEL item, placed on a 24-col grid */ ],
+  "widgets": [ /* the actual panels, referenced by id from layout */ ],
+  "duration": "Last 6 hours",   // UI duration string
+  "variables": [ /* template vars, same shape as the deep-link recipe */ ],
+  "schemaVersion": 7
+}
+```
+
+- **`layout`** — top-level grid placement. Each entry `{ "id":"A", "h":12, "w":24, "x":0, "y":0, "minH":8 }`. Grid is **24 columns wide** (`w:8` = a third, `w:12` = half); `id` must match a widget `id`. You hand-compute `y` to stack rows — there is no auto-flow.
+- **`widgets`** — `{ id, name, type, queries:[{id, expr, dataType:"metrics", editorMode:"editor"}], visualizationConfig:{ type, selectedUnit, ... } }`. `expr` is PromQL with `$var` substitutions.
+- Widget types: `time-series`, `stat`, `text` (markdown in `content`, no queries — use for headers/dividers), `section`.
+
+### Sections (collapsible groups)
+
+A section is a widget `{ id, name, type:"section", color, isCollapsed:false }`. Its **layout** entry carries a `children` array of *relative*-positioned panel entries: `{ id, h, w:24, x:0, y:0, children:[ {h,w,x,y,id,minH}, ... ] }`. The header occupies the top ~2 rows, so children start at `y:2`.
+
+### The update contract
+
+`dashboards update <uuid>` body MUST include **`currentRevision`** (the current `.revisionNumber`) — it's optimistic concurrency. Omit it → `Field validation for 'CurrentRevision' failed on the 'required_if' tag`. Re-`get` after every successful update to read the bumped revision before the next write.
+
+```sh
+groundcover dashboards get <uuid> > d.json
+# NEW_PRESET must be the preset object re-serialized to a STRING
+jq -n --slurpfile d d.json --arg preset "$NEW_PRESET" '{
+  name: $d[0].name, viewType: ($d[0].viewType // "explore"),
+  status: "active", currentRevision: $d[0].revisionNumber, preset: $preset
+}' | groundcover dashboards update <uuid> --body-file /dev/stdin
+```
+
+### Validation rules (the API only says `Dashboard validation failed`)
+
+The update endpoint returns an **opaque** `400 {"message":"Dashboard validation failed"}` — no field, no offending widget. When you hit it, **bisect**: deploy a minimal preset (one section / one panel) and add pieces back until it breaks. Two non-obvious rules that each cost real bisecting time:
+
+1. **Stat widgets (`visualizationConfig.type:"stat"`) validate ONLY as flat top-level `layout` entries — NEVER inside a section's `children[]`.** Time-series widgets work in both. To build an overview stat row, place the stat panels as flat top-level items (with a `text` header widget above them) and keep time-series panels in sections.
+2. **Section `color` accepts only a fixed palette.** Verified valid: `gray`, `purple`, `teal`. Verified rejected: `green`, `blue`, `red`, `yellow`, `orange`.
+
+### Stat panels read "No Results" on lagging metrics → wrap in `last_over_time`
+
+Stat panels evaluate as an **instant query at "now"**. A metric that lags real-time leaves that instant window empty → the panel shows **"No Results"** even though it graphs fine in a time-series panel (which range-queries the whole window). Metrics pulled from polled integrations (e.g. cloud-provider integrations like CloudWatch) commonly lag minutes behind real-time, so stat panels built directly on them come up blank.
+
+Fix: wrap the selector in `last_over_time(<selector>[30m])` **inside** the aggregation so the instant evaluation reaches back past the staleness:
+
+```promql
+max(last_over_time(my_metric{...}[30m]))   # NOT  max(my_metric{...})
+```
+
+The `*_over_time` wrappers render fine in stat panels (e.g. a working `100 * avg_over_time((...)[7d:5m])` uptime stat). In-cluster metrics scraped in real-time (~1s fresh) don't need it.
+
+### Verifying a dashboard without the UI
+
+If the headless browser hits Groundcover's SSO wall (no session), you can't screenshot-verify. Verify via the API instead:
+- **Every query returns data:** pull the deployed preset, substitute concrete values into each `expr` (a `$var` → a real label value; a wildcard var → a `=~".+"` regex), and run it through `metrics query` as a **range** query. Use a window ≥ the metric's emit cadence (sparse integration metrics may only emit every few minutes).
+- **Geometry:** assert no two layout rects overlap and every `x+w ≤ 24` (top-level entries and each section's `children`).
+- **Caveat:** the CLI can't reliably run instant queries (see Common issues), so you can't reproduce the stat-panel instant path from the CLI — reason from staleness + range data.
+
+### Polled-integration metrics (e.g. CloudWatch): label-scheme gotchas
+
+Metrics ingested from a polled cloud integration differ from in-cluster exporter metrics in ways that bite when building dashboards:
+- **They lag real-time** (see the stat-panel note above) — minutes, not seconds.
+- **They're often multiplied by a `stat` dimension** (`stat=average/maximum/minimum`) — every series appears 3×. Always filter to the one you want (e.g. `stat="average"`) or aggregations double/triple-count.
+- **The env/scope label is integration-named**, not a clean `env`. If the same resource is *also* covered by an in-cluster exporter, the two families carry **different label keys** for the same concept (e.g. `instance_id` vs `instanceid`). Use a **separate template variable per label scheme** rather than forcing one variable to span both.
+
 ## Production observability triage flow
 
 When asked "why is X broken in prod" / "what's going on with service Y":
@@ -369,7 +442,7 @@ Almost always one of:
 ### `metrics query` returns no data but the metric exists
 - Field names are **capitalized** (`Promql`, `Start`, `End`, `Step`, `QueryType`) — lowercase is silently accepted by JSON but ignored.
 - `Step` is a string (`"60"`), not a number.
-- For instant queries set `"QueryType": "instant"` and omit `Step`.
+- For instant queries set `"QueryType": "instant"` and omit `Step`. **Observed caveat:** in testing the CLI `metrics query` has returned `400 metricsQueryBadRequest` for instant bodies (every shape tried — `Start`==`End`, `Time`, with/without `QueryType`), even on fresh metrics. When you need a single current value, fall back to a **range** query (`QueryType:"range"` + `Step`) over a short window and take the last point. (Genuine instant PromQL is also reachable via `raw prometheus api query`, but that passthrough may target a different store than `metrics query`.)
 - Parsing the response: results live at `.data.result // .result`; each `values` entry is `[unix_ts, "stringvalue"]`. Sum a range with `[.values[][1]] | map(tonumber) | add`; format the timestamp with `strftime`.
 
 ### `logs search` times out (`context deadline exceeded`)
