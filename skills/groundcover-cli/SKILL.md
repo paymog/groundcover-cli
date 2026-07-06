@@ -74,6 +74,7 @@ Reach for `groundcover raw …` for any of these; the SDK has the *parent* resou
 - **traces:** `attributes`, `details`, `errors`, `filters`, `insights`, `latencies`, `requests`, `values-distribution` (SDK only has `search`)
 - **metrics:** `cardinality`, `cardinality-graph`, `discovery`, `labels-cardinality`, `query-range`, `resources errors|latencies|list|requests` (SDK has `query`, `names`, `keys`, `values`)
 - **prometheus:** `prometheus api query` (raw Prom passthrough — handy for ad-hoc PromQL via `--query query='up'`)
+- **Grafana dashboards:** `grafana search`, `grafana dashboards get|save|delete`, `grafana dashboards permissions get|update`, `grafana dashboards versions|get|restore`, `grafana folders list|get|create|update|delete`, `grafana folders permissions get|update`, `grafana annotations list|create|update|delete`, `grafana prometheus rules`, `grafana datasources label-values`, `grafana ds query`
 - **monitors drilldowns:** `instances filters|query|timeline`, `labels keys`, `silences`, `summary filters|query`, `timeline` (SDK only has CRUD)
 - **k8s drilldowns:** `configmaps|cronjob|daemonsets|deployments|jobs|pods|pvcs|replicasets|statefulsets list`, `container info`, `context events`, `namespaces info|list`, `nodes info-with-resources|list|resources|usage top10`, `pod container usage`, `pods status-over-time`, `workloads availability|events|usage top10`, `network connections|cross-az|cross-az-regions|partners|throughput|top-connections`, `events search-time-series` (SDK only has `clusters`, `workloads`, `events-search`, `events-over-time`)
 - **infra:** `infra hosts info-with-resources`
@@ -205,7 +206,28 @@ groundcover raw k8s clusters list
 groundcover raw dashboards get --dashboard-id <id>
 groundcover raw metrics query-range --body-file body.json
 groundcover raw prometheus api query --query query='up'
+groundcover raw grafana dashboards get --dashboard-uid <uid>
+groundcover raw grafana dashboards save --body-file dashboard.json
+groundcover raw grafana folders list
+groundcover raw grafana ds query --body-file query.json
 ```
+
+
+### Grafana native dashboards
+
+Groundcover also embeds Grafana at `/grafana`. These are **not** the same as Groundcover's first-class `dashboards` SDK resource, so use `raw grafana …` when you need native Grafana JSON dashboards, folders, permissions, annotations, datasource-backed variable values, or panel query execution.
+
+Common commands:
+```sh
+groundcover raw grafana search --query query='service slo' --query folderUIDs=general
+groundcover raw grafana dashboards get --dashboard-uid streamling-pipeline-slo
+groundcover raw grafana dashboards save --body-file dashboard.json
+groundcover raw grafana folders list
+groundcover raw grafana datasources label-values --datasource-uid <uid> --label project_id --query start=<unix> --query end=<unix>
+groundcover raw grafana ds query --query ds_type=prometheus --body-file query.json
+```
+
+Grafana raw commands default to `https://app.groundcover.com` (the webapp host), while normal API/SDK commands default to `https://api.groundcover.com`. Pass `--base-url` only for non-standard deployments.
 
 Raw flags: `--body-json`, `--body-file`, `--set dotted.path=value`, `--query key=value` (repeatable), generated path flags (e.g. `--dashboard-id`), `--raw`. Many raw commands ship a default body captured from the webapp HAR, so you can run them with no `--body-*` at all and override specific fields with `--set`.
 

@@ -40,12 +40,19 @@ type command struct {
 	PathParams   []string
 	DefaultQuery map[string]string
 	DefaultBody  []byte
+	WebApp       bool
 }
 
 var (
-	uuidPattern    = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	uuidPattern    = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	numericPattern = regexp.MustCompile(`^\d+$`)
 	versionPattern = regexp.MustCompile(`^v\d+$`)
-	excludedPaths  = map[string]bool{"/api/track/events": true}
+	excludedPaths  = map[string]bool{
+		"/api/track/events":                        true,
+		"/grafana/api/access-control/user/actions": true,
+		"/grafana/api/frontend/assets":             true,
+		"/grafana/api/frontend-metrics":            true,
+	}
 )
 
 func main() {
@@ -73,7 +80,7 @@ func main() {
 		if !strings.HasSuffix(parsedURL.Hostname(), "groundcover.com") {
 			continue
 		}
-		if !strings.HasPrefix(parsedURL.Path, "/api/") {
+		if !supportedPath(parsedURL.Path) {
 			continue
 		}
 		if excludedPaths[parsedURL.Path] || entry.Response.Status >= 400 {
@@ -99,13 +106,14 @@ func main() {
 		}
 
 		byEndpoint[key] = command{
-			Name:         commandName(parsedURL.Path),
+			Name:         commandName(method, path),
 			Method:       method,
 			Path:         path,
 			Description:  method + " " + path,
 			PathParams:   params,
 			DefaultQuery: defaultQuery,
 			DefaultBody:  parseBody(entry.Request.PostData),
+			WebApp:       strings.HasPrefix(parsedURL.Path, "/grafana/api/"),
 		}
 	}
 
@@ -132,15 +140,30 @@ func main() {
 	}
 }
 
-func commandName(path string) []string {
-	parts := strings.Split(strings.TrimPrefix(path, "/api/"), "/")
+func supportedPath(path string) bool {
+	return strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/grafana/api/")
+}
+
+func commandName(method string, path string) []string {
 	name := []string{}
+	trimmed := path
+	if strings.HasPrefix(path, "/grafana/api/") {
+		name = append(name, "grafana")
+		trimmed = strings.TrimPrefix(path, "/grafana/api/")
+	} else {
+		trimmed = strings.TrimPrefix(path, "/api/")
+	}
+
+	parts := strings.Split(trimmed, "/")
 	for i, part := range parts {
 		if part == "" || versionPattern.MatchString(part) {
 			continue
 		}
-		if uuidPattern.MatchString(part) {
-			if i == 0 || len(name) == 0 || name[len(name)-1] != "get" {
+		if (part == "uid" || part == "id") && i+1 < len(parts) && strings.HasPrefix(parts[i+1], ":") {
+			continue
+		}
+		if strings.HasPrefix(part, ":") {
+			if method == "GET" && i == len(parts)-1 && (len(name) == 0 || name[len(name)-1] != "get") {
 				name = append(name, "get")
 			}
 			continue
@@ -154,11 +177,13 @@ func normalizedPath(path string) (string, []string) {
 	parts := strings.Split(path, "/")
 	params := []string{}
 	for i, part := range parts {
-		if !uuidPattern.MatchString(part) {
+		if !isDynamicPathPart(parts, i, part) {
 			continue
 		}
-		name := paramName(previousPart(parts, i))
-		params = append(params, name)
+		name := dynamicParamName(parts, i)
+		if !contains(params, name) {
+			params = append(params, name)
+		}
 		parts[i] = ":" + name
 	}
 	return strings.Join(parts, "/"), params
@@ -173,12 +198,83 @@ func previousPart(parts []string, index int) string {
 	return "id"
 }
 
+func isDynamicPathPart(parts []string, index int, part string) bool {
+	if uuidPattern.MatchString(part) {
+		return true
+	}
+	if !isGrafanaPath(parts) {
+		return false
+	}
+	previous := previousPart(parts, index)
+	switch previous {
+	case "uid", "label":
+		return true
+	case "folders":
+		return part != "folders"
+	case "annotations", "id", "versions":
+		return numericPattern.MatchString(part)
+	default:
+		return false
+	}
+}
+
+func isGrafanaPath(parts []string) bool {
+	return len(parts) > 3 && parts[1] == "grafana" && parts[2] == "api"
+}
+
+func dynamicParamName(parts []string, index int) string {
+	previous := previousPart(parts, index)
+	if isGrafanaPath(parts) {
+		switch previous {
+		case "uid":
+			return uidParamName(previousPartBefore(parts, index-1))
+		case "folders":
+			return "folderUid"
+		case "label":
+			return "label"
+		case "annotations":
+			return "annotationId"
+		case "id":
+			return paramName(previousPartBefore(parts, index-1))
+		case "versions":
+			return "version"
+		}
+	}
+	return paramName(previous)
+}
+
+func previousPartBefore(parts []string, index int) string {
+	for i := index - 1; i >= 0; i-- {
+		if parts[i] != "" {
+			return parts[i]
+		}
+	}
+	return "id"
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func paramName(previous string) string {
 	base := strings.TrimSuffix(previous, "s")
 	if base == "" {
 		base = "id"
 	}
 	return base + "Id"
+}
+
+func uidParamName(previous string) string {
+	base := strings.TrimSuffix(previous, "s")
+	if base == "" {
+		base = "id"
+	}
+	return base + "Uid"
 }
 
 func parseBody(postData *struct {
@@ -253,6 +349,9 @@ func emit(commands []command) ([]byte, error) {
 		}
 		if len(command.DefaultBody) > 0 {
 			fmt.Fprintf(&b, "\t\tDefaultBody: json.RawMessage(%s),\n", strconv.Quote(string(command.DefaultBody)))
+		}
+		if command.WebApp {
+			b.WriteString("\t\tWebApp: true,\n")
 		}
 		b.WriteString("\t},\n")
 	}

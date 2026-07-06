@@ -160,6 +160,10 @@ groundcover raw k8s clusters list
 groundcover raw dashboards get --dashboard-id <id>
 groundcover raw metrics query-range --body-file body.json
 groundcover raw prometheus api query --query query='up'
+groundcover raw grafana dashboards get --dashboard-uid <uid>
+groundcover raw grafana dashboards save --body-file dashboard.json
+groundcover raw grafana folders list
+groundcover raw grafana ds query --body-file query.json
 ```
 
 Raw commands support:

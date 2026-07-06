@@ -44,7 +44,7 @@ func NewCommand(cfg *config.Config) *cobra.Command {
 }
 
 func printCommands(cmd *cobra.Command, filter string) {
-	for _, command := range Commands {
+	for _, command := range allCommands() {
 		name := command.Key()
 		if filter != "" && !strings.Contains(name, filter) {
 			continue

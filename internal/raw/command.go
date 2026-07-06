@@ -2,6 +2,7 @@ package raw
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 )
 
@@ -14,6 +15,7 @@ type Command struct {
 	DefaultQuery    map[string]string
 	DefaultBody     json.RawMessage
 	BodyContentType string
+	WebApp          bool
 }
 
 func (c Command) Key() string {
@@ -21,7 +23,7 @@ func (c Command) Key() string {
 }
 
 func Find(tokens []string) (Command, bool) {
-	for _, command := range Commands {
+	for _, command := range allCommands() {
 		if len(command.Name) != len(tokens) {
 			continue
 		}
@@ -37,6 +39,31 @@ func Find(tokens []string) (Command, bool) {
 		}
 	}
 	return Command{}, false
+}
+
+func allCommands() []Command {
+	commands := make([]Command, 0, len(Commands)+len(ExtraCommands))
+	commands = append(commands, Commands...)
+	commands = append(commands, ExtraCommands...)
+	byName := map[string]Command{}
+	for _, command := range commands {
+		if _, exists := byName[command.Key()]; exists {
+			continue
+		}
+		byName[command.Key()] = command
+	}
+
+	keys := make([]string, 0, len(byName))
+	for key := range byName {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	ordered := make([]Command, 0, len(keys))
+	for _, key := range keys {
+		ordered = append(ordered, byName[key])
+	}
+	return ordered
 }
 
 func kebab(value string) string {

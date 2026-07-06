@@ -16,6 +16,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const defaultWebAppBaseURL = "https://app.groundcover.com"
+
 func Run(command Command, cfg config.Config, opts Options, out io.Writer) error {
 	if err := cfg.RequireAPIKey(); err != nil {
 		return err
@@ -76,7 +78,11 @@ func buildURL(command Command, cfg config.Config, opts Options) (*url.URL, error
 		path = strings.ReplaceAll(path, ":"+param, url.PathEscape(value))
 	}
 
-	base, err := url.Parse(cfg.NormalizedBaseURL())
+	baseURL := cfg.NormalizedBaseURL()
+	if command.WebApp && baseURL == config.DefaultBaseURL {
+		baseURL = defaultWebAppBaseURL
+	}
+	base, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
 	}
