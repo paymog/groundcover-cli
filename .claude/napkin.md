@@ -15,4 +15,6 @@
 - (approaches that failed and why)
 
 ## Domain Notes
-- (project/domain context that matters)
+- `raw grafana …` commands CANNOT authenticate with the gcsa bearer token. Embedded Grafana at app.groundcover.com/grafana/* is session-gated (Auth0/GC HttpOnly cookie via the SPA). Bearer/unauthenticated requests to `/grafana/api/*` hit a catch-all that returns the ~980KB Grafana SPA `index.html` (200 text/html), never JSON. Signal of a real Grafana response = `grafana-trace-id` response header + content-type application/json.
+- The gcsa bearer IS valid against the real GC API (api.groundcover.com/api/*) — verified via GET /api/monitors/recurring-silences and GET /api/dashboards (both return JSON). So the grafana breakage is the proxy path, not the key.
+- For dashboards over the CLI, use the GC-native SDK `dashboards` resource (/api/dashboards), NOT the embedded-Grafana `raw grafana …` passthrough.
