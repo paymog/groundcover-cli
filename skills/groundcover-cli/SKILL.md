@@ -25,9 +25,11 @@ Defaults baked in:
 - `--base-url https://api.groundcover.com`
 - `--backend-id groundcover`
 
-No tenant UUID default — set `--tenant-uuid` / `GROUNDCOVER_TENANT_UUID` for the `raw …` webapp endpoints that require an `X-Tenant-UUID` header.
+No tenant UUID default — set `--tenant-uuid` / `GROUNDCOVER_TENANT_UUID` to send an `X-Tenant-UUID` header on non-grafana `raw …` passthrough calls (e.g. cross-tenant access). The embedded Grafana `raw grafana …` endpoints ignore it (see the Grafana section below).
 
-Override env: `GROUNDCOVER_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GROUNDCOVER_BASE_URL` (or `GC_*` equivalents). Same names work as `--api-key`, `--backend-id`, `--tenant-uuid`, `--base-url` flags.
+The `raw grafana …` commands do NOT use the `gcsa_` key at all — they need a Grafana service account token (`glsa_…`). Set `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN` / `--grafana-token`.
+
+Override env: `GROUNDCOVER_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GROUNDCOVER_BASE_URL` (or `GC_*` equivalents). Same names work as `--api-key`, `--backend-id`, `--tenant-uuid`, `--grafana-token`, `--base-url` flags.
 
 ### Stored profiles (alternative to env vars)
 
@@ -61,7 +63,7 @@ Always try the SDK form first.
 - `--set dotted.path=value` — deep-merge overrides on top of the body
 - `--query key=value` (repeatable) — arbitrary querystring overrides
 - Built-in default body captured from the webapp HAR (SDK requires explicit `--body-file`/`--body-json`)
-- Sends `X-Tenant-UUID` (SDK transport derives tenant from the API key — needed only when hitting webapp endpoints)
+- Sends `X-Tenant-UUID` on non-grafana raw calls when you set `--tenant-uuid` / `GROUNDCOVER_TENANT_UUID` (for cross-tenant access; the SDK transport otherwise derives tenant from the API key). Grafana `raw grafana …` commands don't use it — they authenticate with the `glsa_` token instead.
 - `groundcover raw list` to discover every captured endpoint
 
 Both surfaces support `--body-file` (json/yaml), `--body-json`, and `--raw` output.
@@ -216,6 +218,17 @@ groundcover raw grafana ds query --body-file query.json
 ### Grafana native dashboards
 
 Groundcover also embeds Grafana at `/grafana`. These are **not** the same as Groundcover's first-class `dashboards` SDK resource, so use `raw grafana …` when you need native Grafana JSON dashboards, folders, permissions, annotations, datasource-backed variable values, or panel query execution.
+
+**Auth:** the embedded Grafana lives behind a session-gated proxy that ignores the `gcsa_` API key, backend ID, and tenant UUID. A bearer/`gcsa_` request to `/grafana/api/*` just returns the ~980KB Grafana SPA `index.html` (HTTP 200, `text/html`), never JSON. These commands require a Grafana service account token (`glsa_…`) instead: set `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN` (or `--grafana-token`). Run any `raw grafana …` command without it and the CLI prints a full setup guide.
+
+**Generating a token** (needs a groundcover tenant admin). The token comes from groundcover's *official* CLI (`github.com/groundcover-com/cli`), which unfortunately also installs a binary named `groundcover`. Its installer drops it at `~/.groundcover/bin/groundcover` and prepends that dir to your PATH, so afterwards `groundcover` resolves to the official CLI and shadows this one. Invoke the official binary by full path to avoid the collision:
+```sh
+sh -c "$(curl -fsSL https://groundcover.com/install.sh)"      # installs to ~/.groundcover/bin
+~/.groundcover/bin/groundcover auth login                     # auth flow
+~/.groundcover/bin/groundcover auth generate-service-account-token   # prints glsa_… once
+export GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN=glsa_...     # hand it to this CLI
+```
+To keep this CLI as `groundcover`, remove the `~/.groundcover/bin` PATH line the installer adds to your shell rc.
 
 Common commands:
 ```sh
