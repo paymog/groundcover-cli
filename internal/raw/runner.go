@@ -3,6 +3,7 @@ package raw
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,8 +50,8 @@ func Run(command Command, cfg config.Config, opts Options, out io.Writer) error 
 		// Embedded Grafana is session-gated and ignores the gcsa bearer/backend
 		// headers; it only accepts a Grafana service account token. Set that token
 		// and bypass the SDK transport (which would clobber Authorization).
-		if err := cfg.RequireGrafanaToken(); err != nil {
-			return err
+		if strings.TrimSpace(cfg.GrafanaToken) == "" {
+			return errors.New(grafanaSetupGuide())
 		}
 		req.Header.Set("Authorization", "Bearer "+cfg.GrafanaToken)
 		client = cfg.WebAppHTTPClient()

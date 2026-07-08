@@ -119,16 +119,6 @@ func (c Config) RequireAPIKey() error {
 	return nil
 }
 
-// RequireGrafanaToken enforces the Grafana service account token used for the
-// embedded Grafana (`raw grafana …`) endpoints. That proxy is session-gated and
-// ignores the gcsa bearer/backend headers, so it only accepts a `glsa_…` token.
-func (c Config) RequireGrafanaToken() error {
-	if strings.TrimSpace(c.GrafanaToken) == "" {
-		return errors.New("missing Grafana service account token: set GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN or pass --grafana-token (raw grafana commands only)")
-	}
-	return nil
-}
-
 func (c Config) RequireSDKAuth() error {
 	if err := c.RequireAPIKey(); err != nil {
 		return err

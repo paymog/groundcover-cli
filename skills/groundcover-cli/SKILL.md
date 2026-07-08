@@ -219,7 +219,16 @@ groundcover raw grafana ds query --body-file query.json
 
 Groundcover also embeds Grafana at `/grafana`. These are **not** the same as Groundcover's first-class `dashboards` SDK resource, so use `raw grafana …` when you need native Grafana JSON dashboards, folders, permissions, annotations, datasource-backed variable values, or panel query execution.
 
-**Auth:** the embedded Grafana lives behind a session-gated proxy that ignores the `gcsa_` API key, backend ID, and tenant UUID. A bearer/`gcsa_` request to `/grafana/api/*` just returns the ~980KB Grafana SPA `index.html` (HTTP 200, `text/html`), never JSON. These commands require a Grafana service account token instead: set `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN=glsa_…` (or `--grafana-token`). Without it you get: `missing Grafana service account token: set GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN or pass --grafana-token`.
+**Auth:** the embedded Grafana lives behind a session-gated proxy that ignores the `gcsa_` API key, backend ID, and tenant UUID. A bearer/`gcsa_` request to `/grafana/api/*` just returns the ~980KB Grafana SPA `index.html` (HTTP 200, `text/html`), never JSON. These commands require a Grafana service account token (`glsa_…`) instead: set `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN` (or `--grafana-token`). Run any `raw grafana …` command without it and the CLI prints a full setup guide.
+
+**Generating a token** (needs a groundcover tenant admin). The token comes from groundcover's *official* CLI (`github.com/groundcover-com/cli`), which unfortunately also installs a binary named `groundcover`. Its installer drops it at `~/.groundcover/bin/groundcover` and prepends that dir to your PATH, so afterwards `groundcover` resolves to the official CLI and shadows this one. Invoke the official binary by full path to avoid the collision:
+```sh
+sh -c "$(curl -fsSL https://groundcover.com/install.sh)"      # installs to ~/.groundcover/bin
+~/.groundcover/bin/groundcover auth login                     # auth flow
+~/.groundcover/bin/groundcover auth generate-service-account-token   # prints glsa_… once
+export GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN=glsa_...     # hand it to this CLI
+```
+To keep this CLI as `groundcover`, remove the `~/.groundcover/bin` PATH line the installer adds to your shell rc.
 
 Common commands:
 ```sh
