@@ -63,7 +63,7 @@ Always try the SDK form first.
 - `--set dotted.path=value` — deep-merge overrides on top of the body
 - `--query key=value` (repeatable) — arbitrary querystring overrides
 - Built-in default body captured from the webapp HAR (SDK requires explicit `--body-file`/`--body-json`)
-- Sends `X-Tenant-UUID` (SDK transport derives tenant from the API key — needed only when hitting webapp endpoints)
+- Sends `X-Tenant-UUID` on non-grafana raw calls when you set `--tenant-uuid` / `GROUNDCOVER_TENANT_UUID` (for cross-tenant access; the SDK transport otherwise derives tenant from the API key). Grafana `raw grafana …` commands don't use it — they authenticate with the `glsa_` token instead.
 - `groundcover raw list` to discover every captured endpoint
 
 Both surfaces support `--body-file` (json/yaml), `--body-json`, and `--raw` output.
