@@ -25,9 +25,11 @@ Defaults baked in:
 - `--base-url https://api.groundcover.com`
 - `--backend-id groundcover`
 
-No tenant UUID default — set `--tenant-uuid` / `GROUNDCOVER_TENANT_UUID` for the `raw …` webapp endpoints that require an `X-Tenant-UUID` header.
+No tenant UUID default — set `--tenant-uuid` / `GROUNDCOVER_TENANT_UUID` to send an `X-Tenant-UUID` header on non-grafana `raw …` passthrough calls (e.g. cross-tenant access). The embedded Grafana `raw grafana …` endpoints ignore it (see the Grafana section below).
 
-Override env: `GROUNDCOVER_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GROUNDCOVER_BASE_URL` (or `GC_*` equivalents). Same names work as `--api-key`, `--backend-id`, `--tenant-uuid`, `--base-url` flags.
+The `raw grafana …` commands do NOT use the `gcsa_` key at all — they need a Grafana service account token (`glsa_…`). Set `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN` / `--grafana-token`.
+
+Override env: `GROUNDCOVER_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GROUNDCOVER_BASE_URL` (or `GC_*` equivalents). Same names work as `--api-key`, `--backend-id`, `--tenant-uuid`, `--grafana-token`, `--base-url` flags.
 
 ### Stored profiles (alternative to env vars)
 
@@ -216,6 +218,8 @@ groundcover raw grafana ds query --body-file query.json
 ### Grafana native dashboards
 
 Groundcover also embeds Grafana at `/grafana`. These are **not** the same as Groundcover's first-class `dashboards` SDK resource, so use `raw grafana …` when you need native Grafana JSON dashboards, folders, permissions, annotations, datasource-backed variable values, or panel query execution.
+
+**Auth:** the embedded Grafana lives behind a session-gated proxy that ignores the `gcsa_` API key, backend ID, and tenant UUID. A bearer/`gcsa_` request to `/grafana/api/*` just returns the ~980KB Grafana SPA `index.html` (HTTP 200, `text/html`), never JSON. These commands require a Grafana service account token instead: set `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN=glsa_…` (or `--grafana-token`). Without it you get: `missing Grafana service account token: set GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN or pass --grafana-token`.
 
 Common commands:
 ```sh

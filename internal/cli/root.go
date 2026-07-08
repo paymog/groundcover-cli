@@ -40,6 +40,7 @@ func NewRootCommand() *cobra.Command {
 	flags.StringVar(&cfg.APIKey, "api-key", cfg.APIKey, "Groundcover API key. Env: GROUNDCOVER_API_KEY or GC_API_KEY")
 	flags.StringVar(&cfg.BackendID, "backend-id", cfg.BackendID, "Groundcover backend ID. Env: GROUNDCOVER_BACKEND_ID or GC_BACKEND_ID")
 	flags.StringVar(&cfg.TenantUUID, "tenant-uuid", cfg.TenantUUID, "Groundcover tenant UUID (raw endpoints only). Env: GROUNDCOVER_TENANT_UUID or GC_TENANT_UUID")
+	flags.StringVar(&cfg.GrafanaToken, "grafana-token", cfg.GrafanaToken, "Grafana service account token for raw grafana commands. Env: GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN or GC_GRAFANA_SERVICE_ACCOUNT_TOKEN")
 	flags.StringVar(&cfg.BaseURL, "base-url", cfg.BaseURL, "Groundcover API base URL. Env: GROUNDCOVER_BASE_URL or GC_BASE_URL")
 	flags.StringVar(&cfg.Profile, "profile", os.Getenv("GROUNDCOVER_PROFILE"), "Named credential profile to use. Env: GROUNDCOVER_PROFILE")
 	flags.BoolVar(&cfg.Raw, "raw", false, "print response bytes without JSON formatting where supported")

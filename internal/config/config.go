@@ -21,13 +21,14 @@ const (
 )
 
 type Config struct {
-	APIKey     string
-	BackendID  string
-	BaseURL    string
-	TenantUUID string
-	Profile    string
-	Raw        bool
-	Timeout    time.Duration
+	APIKey       string
+	BackendID    string
+	BaseURL      string
+	TenantUUID   string
+	GrafanaToken string
+	Profile      string
+	Raw          bool
+	Timeout      time.Duration
 }
 
 func FromEnv() Config {
@@ -46,6 +47,9 @@ func (c *Config) ApplyEnv() {
 	}
 	if c.TenantUUID == "" {
 		c.TenantUUID = firstEnv("GROUNDCOVER_TENANT_UUID", "GC_TENANT_UUID")
+	}
+	if c.GrafanaToken == "" {
+		c.GrafanaToken = firstEnv("GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN", "GC_GRAFANA_SERVICE_ACCOUNT_TOKEN")
 	}
 	if strings.TrimSpace(c.BaseURL) == "" {
 		c.BaseURL = defaultString(firstEnv("GROUNDCOVER_BASE_URL", "GC_BASE_URL"), DefaultBaseURL)
@@ -115,6 +119,16 @@ func (c Config) RequireAPIKey() error {
 	return nil
 }
 
+// RequireGrafanaToken enforces the Grafana service account token used for the
+// embedded Grafana (`raw grafana …`) endpoints. That proxy is session-gated and
+// ignores the gcsa bearer/backend headers, so it only accepts a `glsa_…` token.
+func (c Config) RequireGrafanaToken() error {
+	if strings.TrimSpace(c.GrafanaToken) == "" {
+		return errors.New("missing Grafana service account token: set GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN or pass --grafana-token (raw grafana commands only)")
+	}
+	return nil
+}
+
 func (c Config) RequireSDKAuth() error {
 	if err := c.RequireAPIKey(); err != nil {
 		return err
@@ -138,6 +152,13 @@ func (c Config) HTTPClient() *http.Client {
 			nil,
 		),
 	}
+}
+
+// WebAppHTTPClient returns a plain client (no SDK transport) for embedded
+// Grafana requests. The SDK transport unconditionally overwrites Authorization
+// with the gcsa bearer, so the caller sets the Grafana token itself.
+func (c Config) WebAppHTTPClient() *http.Client {
+	return &http.Client{Timeout: c.Timeout}
 }
 
 func firstEnv(names ...string) string {

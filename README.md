@@ -34,7 +34,7 @@ export GROUNDCOVER_API_KEY=...
 export GROUNDCOVER_BACKEND_ID=...
 ```
 
-Also accepted: `GC_API_KEY`, `GC_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GC_TENANT_UUID`, `GROUNDCOVER_BASE_URL`, `GC_BASE_URL`.
+Also accepted: `GC_API_KEY`, `GC_BACKEND_ID`, `GROUNDCOVER_TENANT_UUID`, `GC_TENANT_UUID`, `GROUNDCOVER_BASE_URL`, `GC_BASE_URL`, `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GC_GRAFANA_SERVICE_ACCOUNT_TOKEN`.
 
 ### Stored profiles
 
@@ -72,6 +72,7 @@ Defaults (override the env or flag for your own backend/tenant):
 - Base URL: `https://api.groundcover.com`
 - Backend ID: `groundcover` (`GROUNDCOVER_BACKEND_ID` / `--backend-id`)
 - Tenant UUID: none. Set `GROUNDCOVER_TENANT_UUID` / `--tenant-uuid` to send `X-Tenant-UUID` on raw HAR-derived requests; the SDK transport already implies tenant from the API key.
+- Grafana service account token: none. The embedded Grafana (`raw grafana …`) endpoints are session-gated and ignore the API key, so they need a Grafana service account token (`glsa_…`). Set `GROUNDCOVER_GRAFANA_SERVICE_ACCOUNT_TOKEN` / `--grafana-token`. It is only used for `raw grafana …` commands.
 
 ## SDK-backed commands
 

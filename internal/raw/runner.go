@@ -19,10 +19,6 @@ import (
 const defaultWebAppBaseURL = "https://app.groundcover.com"
 
 func Run(command Command, cfg config.Config, opts Options, out io.Writer) error {
-	if err := cfg.RequireAPIKey(); err != nil {
-		return err
-	}
-
 	requestURL, err := buildURL(command, cfg, opts)
 	if err != nil {
 		return err
@@ -47,12 +43,28 @@ func Run(command Command, cfg config.Config, opts Options, out io.Writer) error 
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	if cfg.TenantUUID != "" {
-		// Webapp-derived endpoints require X-Tenant-UUID even when the bearer token already identifies the tenant.
-		req.Header.Set("X-Tenant-UUID", cfg.TenantUUID)
+
+	var client *http.Client
+	if command.WebApp {
+		// Embedded Grafana is session-gated and ignores the gcsa bearer/backend
+		// headers; it only accepts a Grafana service account token. Set that token
+		// and bypass the SDK transport (which would clobber Authorization).
+		if err := cfg.RequireGrafanaToken(); err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+cfg.GrafanaToken)
+		client = cfg.WebAppHTTPClient()
+	} else {
+		if err := cfg.RequireAPIKey(); err != nil {
+			return err
+		}
+		if cfg.TenantUUID != "" {
+			req.Header.Set("X-Tenant-UUID", cfg.TenantUUID)
+		}
+		client = cfg.HTTPClient()
 	}
 
-	resp, err := cfg.HTTPClient().Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
