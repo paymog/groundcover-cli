@@ -2,8 +2,11 @@ package raw
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +38,111 @@ func TestFind(t *testing.T) {
 	}
 	if command.Path != "/api/backend/settings" {
 		t.Fatalf("unexpected path %s", command.Path)
+	}
+}
+
+func TestStorageManagementCommands(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+	}{
+		{name: "get", method: http.MethodGet},
+		{name: "update", method: http.MethodPut},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			command, ok := Find([]string{"storage-management", tt.name})
+			if !ok {
+				t.Fatalf("expected storage-management %s command", tt.name)
+			}
+			if command.Method != tt.method {
+				t.Fatalf("unexpected method %s", command.Method)
+			}
+			if command.Path != "/api/storage-management/:dataType" {
+				t.Fatalf("unexpected path %s", command.Path)
+			}
+			if len(command.PathParams) != 1 || command.PathParams[0] != "dataType" {
+				t.Fatalf("unexpected path params %#v", command.PathParams)
+			}
+
+			requestURL, err := buildURL(command, config.Config{BaseURL: config.DefaultBaseURL}, Options{
+				PathValues: map[string]string{"dataType": "monitor_instance"},
+			})
+			if err != nil {
+				t.Fatalf("buildURL failed: %v", err)
+			}
+			if got, want := requestURL.String(), "https://api.groundcover.com/api/storage-management/monitor_instance"; got != want {
+				t.Fatalf("unexpected URL\n got: %s\nwant: %s", got, want)
+			}
+		})
+	}
+}
+
+func TestRunStorageManagementUpdate(t *testing.T) {
+	var captured *http.Request
+	var capturedBody []byte
+	var readErr error
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.Clone(r.Context())
+		capturedBody, readErr = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	command, ok := Find([]string{"storage-management", "update"})
+	if !ok {
+		t.Fatal("expected storage-management update command")
+	}
+	bodyJSON := `{"retention":"30d","version":3,"cold_move_duration":"7d","cold_volume":"cold","custom_rules":[]}`
+	cfg := config.Config{
+		APIKey:     "my-api-key",
+		BackendID:  "my-backend",
+		TenantUUID: "my-tenant",
+		BaseURL:    srv.URL,
+		Timeout:    time.Second,
+	}
+	var out bytes.Buffer
+	err := Run(command, cfg, Options{
+		PathValues: map[string]string{"dataType": "logs"},
+		BodyJSON:   bodyJSON,
+	}, &out)
+	if err != nil {
+		t.Fatalf("Run returned unexpected error: %v", err)
+	}
+	if captured == nil {
+		t.Fatal("server was never hit")
+	}
+	if readErr != nil {
+		t.Fatalf("reading request body failed: %v", readErr)
+	}
+	if got, want := captured.Method, http.MethodPut; got != want {
+		t.Errorf("method = %q, want %q", got, want)
+	}
+	if got, want := captured.URL.Path, "/api/storage-management/logs"; got != want {
+		t.Errorf("path = %q, want %q", got, want)
+	}
+	if got, want := captured.Header.Get("Content-Type"), "application/json"; got != want {
+		t.Errorf("Content-Type = %q, want %q", got, want)
+	}
+	if got, want := captured.Header.Get("Authorization"), "Bearer my-api-key"; got != want {
+		t.Errorf("Authorization = %q, want %q", got, want)
+	}
+	if got, want := captured.Header.Get("X-Tenant-UUID"), "my-tenant"; got != want {
+		t.Errorf("X-Tenant-UUID = %q, want %q", got, want)
+	}
+
+	var gotBody, wantBody map[string]any
+	if err := json.Unmarshal(capturedBody, &gotBody); err != nil {
+		t.Fatalf("decoding captured body failed: %v", err)
+	}
+	if err := json.Unmarshal([]byte(bodyJSON), &wantBody); err != nil {
+		t.Fatalf("decoding expected body failed: %v", err)
+	}
+	if !reflect.DeepEqual(gotBody, wantBody) {
+		t.Errorf("body = %#v, want %#v", gotBody, wantBody)
 	}
 }
 
