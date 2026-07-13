@@ -42,9 +42,10 @@ func Find(tokens []string) (Command, bool) {
 }
 
 func allCommands() []Command {
-	commands := make([]Command, 0, len(Commands)+len(ExtraCommands))
+	commands := make([]Command, 0, len(Commands)+len(ExtraCommands)+len(StorageManagementCommands))
 	commands = append(commands, Commands...)
 	commands = append(commands, ExtraCommands...)
+	commands = append(commands, StorageManagementCommands...)
 	byName := map[string]Command{}
 	for _, command := range commands {
 		if _, exists := byName[command.Key()]; exists {

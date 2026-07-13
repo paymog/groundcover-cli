@@ -83,6 +83,7 @@ Reach for `groundcover raw …` for any of these; the SDK has the *parent* resou
 - **resources / RUM:** `resources apis errors|filters|latencies|list|requests`, `rum sessions filters|query`, `sources list`
 - **pipelines stats:** `pipelines logs current-stats`, `pipelines traces current-stats` (SDK only does config CRUD)
 - **tenant / billing / RBAC reads:** `rbac seatsUsage`, `rbac tenant ai-settings`, `rbac tenant settings`, `backend settings`, `billing method`, `agent token-budgets|token-usage|token-usage history|token-usage tenant`
+- **storage management:** `storage-management get|update --data-type <logs|traces|events|measurements|monitor_instance>` for retention, gcQL exception rules, and index-tier settings
 - **misc:** `graph`, `graph filters`, `views member`, `views member defaults`, `migrations`, `connectors list org|personal`, `synthetics rules`, `aggregations metrics config|config default`, `integrations data config`
 
 Run `groundcover raw list` / `groundcover raw list <group>` to confirm the exact name before invoking.
@@ -213,6 +214,20 @@ groundcover raw grafana dashboards save --body-file dashboard.json
 groundcover raw grafana folders list
 groundcover raw grafana ds query --body-file query.json
 ```
+
+### Storage management
+
+Admins can read and update lifecycle settings for `logs`, `traces`, `events`, `measurements` (APM), and `monitor_instance` (monitor issues):
+
+```sh
+groundcover raw storage-management get --data-type logs --raw \
+  | jq '{retention,version,cold_move_duration,cold_volume,custom_rules:(.custom_rules // [])}' \
+  > storage.json
+# Edit storage.json, preserving every writable field and the complete rule list.
+groundcover raw storage-management update --data-type logs --body-file storage.json
+```
+
+Updates use optimistic concurrency and replace the writable settings document. Always start from `get`, carry forward its current `version`, and preserve `retention`, `cold_move_duration`, `cold_volume`, and the complete `custom_rules` list; omitting `custom_rules` removes existing rules. A successful update increments `version`. Each observed custom rule contains `name`, `retention`, and a gcQL `filters` expression.
 
 
 ### Grafana native dashboards

@@ -167,6 +167,19 @@ groundcover raw grafana folders list
 groundcover raw grafana ds query --body-file query.json
 ```
 
+Storage management uses one endpoint per data type:
+
+```sh
+groundcover raw storage-management get --data-type logs --raw \
+  | jq '{retention,version,cold_move_duration,cold_volume,custom_rules:(.custom_rules // [])}' \
+  > storage.json
+# Edit storage.json, preserving every writable field and the complete rule list.
+groundcover raw storage-management update --data-type logs --body-file storage.json
+```
+
+Supported data types are `logs`, `traces`, `events`, `measurements`, and `monitor_instance`. Updates use optimistic concurrency and replace the writable settings document: start from `get`, pass its current `version`, and preserve `retention`, `cold_move_duration`, `cold_volume`, and the full `custom_rules` list. Omitting `custom_rules` removes existing rules.
+
+
 Raw commands support:
 
 - `--body-json '<json>'`
